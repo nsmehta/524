@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <map>
 #include <sstream>
+#include "seekgzip.h"
 
 
 // g++ test.cpp -std=c++11 -lboost_iostreams -lz -lbz2
@@ -147,16 +148,14 @@ int read_quants_bin(std::string filepath) {
 	std::cout << "row_map1 size = " << row_map1.size() << std::endl;
 	std::cout << "col_map1 size = " << col_map1.size() << std::endl;
 
-	std::cout << "row_map2 size = " << row_map2.size() << std::endl;
-	std::cout << "col_map2 size = " << col_map2.size() << std::endl;
-
 
   std::cout << "in read quants bin" << '\n';
   std::cout << "filepath = " << filepath << '\n';
   std::ifstream infile1(filepath, std::ios_base::in | std::ios_base::binary);
   std::ifstream infile2("/home/nikhil/Downloads/alevin_matrices/mouse_2/quants_mat.gz", std::ios_base::in | std::ios_base::binary);
 	std::ofstream outfile("out_total.gz", std::ios_base::out | std::ios_base::binary);
-	std::ofstream outpointers("out_pointers.txt", std::ios_base::out | std::ios_base::binary);
+	std::ofstream outpointers("out_pointers.txt", std::ios_base::out | std::ios::trunc | std::ios_base::binary);
+	// std::ofstream outfile2("out_total.txt", std::ios_base::out | std::ios_base::binary);
 
 
 	//double sample[col_size1 + col_size2];
@@ -185,6 +184,8 @@ int read_quants_bin(std::string filepath) {
 				in1.read((char *)&sample1, sizeof(sample1));
 				//std::cout << "sample = " << sample[col_size1];
 				out.write((char *)&sample1, sizeof(sample1));
+				// outfile2.write((char *)&sample1, sizeof(sample1));
+
 				result++;
 			}
 			length = outfile.tellp();
@@ -202,6 +203,8 @@ int read_quants_bin(std::string filepath) {
 				//in2.read((char *)(&sample[col_size1]), sizeof(sample2));
 				in2.read((char *)&sample2, sizeof(sample2));
 				out.write((char *)&sample2, sizeof(sample2));
+				// outfile2.write((char *)&sample2, sizeof(sample2));
+
 				result++;
 			}
 
@@ -236,6 +239,7 @@ int read_quants_bin(std::string filepath) {
 	infile1.close();
 	infile2.close();
 	outfile.close();
+	// outfile2.close();
 /*
 		std::ifstream file("quants_mat.gz", std::ios_base::in | std::ios_base::binary);
     boost::iostreams::filtering_streambuf<boost::iostreams::input> inbuf;
@@ -273,6 +277,10 @@ int read_quants_bin(std::string filepath) {
 
 int search_quants_bin(int mouse_id, std::string row_id, std::string col_id) {
 
+
+  std::ifstream r_file ("out_total.gz", std::ios::binary);
+
+
 	std::ifstream infile("out_total.gz", std::ios_base::in | std::ios_base::binary);
 	std::ifstream inpointers("out_pointers.txt", std::ios_base::in | std::ios_base::binary);
 
@@ -285,6 +293,11 @@ int search_quants_bin(int mouse_id, std::string row_id, std::string col_id) {
 	if(mouse_id == 1) {
 		cb_file.open("/home/nikhil/Downloads/alevin_matrices/mouse_1/quants_mat_rows.txt");
 		gene_file.open("/home/nikhil/Downloads/alevin_matrices/mouse_1/quants_mat_cols.txt");
+	}
+	else {
+		cb_file.open("/home/nikhil/Downloads/alevin_matrices/mouse_2/quants_mat_rows.txt");
+		gene_file.open("/home/nikhil/Downloads/alevin_matrices/mouse_2/quants_mat_cols.txt");
+
 	}
 
 
@@ -323,7 +336,7 @@ int search_quants_bin(int mouse_id, std::string row_id, std::string col_id) {
 	while(std::getline(gene_file, line)) {
 		if(line == col_id) {
 			col_flag = 1;
-			break;
+			//break;
 		}
 		if(col_flag == 0) {
 			col_count++;
@@ -337,74 +350,82 @@ int search_quants_bin(int mouse_id, std::string row_id, std::string col_id) {
 	}
 
 
-	// read the mouse pointer indicating file:
+	
+	std::cout << "row_count = " << row_count << " col_count = " <<  col_count << " num_cols = " << num_cols << std::endl;
 
 	std::streampos fileSize;
   double *fileBuffer;
   size_t sizeOfBuffer;
 
+	inpointers.seekg (0, std::ios::end);
+	int length = inpointers.tellg();
+	inpointers.seekg (0, std::ios::beg);
 
-  // Get the size of the file
-  inpointers.seekg(0, std::ios::end);
-  fileSize = inpointers.tellg();
-  inpointers.seekg(0, std::ios::beg);
+  char *buffer = new char[length];
 
-  sizeOfBuffer = fileSize / sizeof(double);
-  fileBuffer = new double[sizeOfBuffer];
+	//inpointers.read(buffer,length);
 
-  inpointers.read(reinterpret_cast<char*>(fileBuffer), fileSize);
+	sizeOfBuffer = length / sizeof(double);
+
+  fileBuffer = new double[2];
+	std::cout << "size = " << sizeOfBuffer << std::endl;
+
+  inpointers.read(reinterpret_cast<char*>(fileBuffer), length);
 
   // Now convert the double array into vector
   std::vector<double> *data = new std::vector<double>(fileBuffer, fileBuffer + sizeOfBuffer);
 
+	std::cout << "data->size() = " << data->size() << std::endl;
+
 	if (mouse_id > data->size()) {
 		std::cout << "mouse id not found!" << std::endl;
-		return -1;
+		//return -1;
 	}
 
+
+
 	int count = 0;
-	double length = 0;
+	double offset = 0;
+
 
 	for (const auto& str: *data) {
 			if(count == mouse_id - 1) {
-				//length = str;
 				std::cout << "str = " << str << " \n";
+				offset = (double)str;
 				break;
 			}
 			count++;
-
 	}
 
-	//double length = data[mouse_id - 1];
-	double result = 0;
+	std::cout << "offset = " <<  ((row_count) * sizeof(double) * num_cols) + (col_count * sizeof(double)) << std::endl;
+	offset += ((row_count) * sizeof(double) * num_cols) + (col_count * sizeof(double));
 
-  //free(fileBuffer);
-  try {
-      boost::iostreams::filtering_istream in;
-      in.push(boost::iostreams::gzip_decompressor());
-      in.push(infile);
+	std::cout << "offset = " << offset << std::endl;
 
-			// will have to traverse entire file
-
-			boost::iostreams::stream_offset off;
-
-			boost::iostreams::stream_offset offset = (length + (num_cols * sizeof(double) * row_count) + (col_count * sizeof(double)));
-
-			std::cout << "offset = " << offset << std::endl;
-
-	    off = boost::iostreams::position_to_offset(boost::iostreams::seek(in, offset, BOOST_IOS::end));
-
-			in.read((char *)&result, sizeof(result));
-
-			std::cout << "result = " << result << std::endl;
-
-
-			
-
+	seekgzip_t* zs = seekgzip_open("/home/nikhil/Downloads/alevin_matrices/mouse_1/quants_mat.gz", NULL);
+	if (zs == NULL) {
+		  fprintf(stderr, "ERROR: Failed to open the index file.\n");
+		  return 1;
 	}
-  catch(const boost::iostreams::gzip_error& e) {
-       std::cout << e.what() << '\n';
+
+	off_t begin = offset;
+	seekgzip_seek(zs, begin);
+	double result;
+
+
+	int read = seekgzip_read(zs, &result, sizeof(result));
+
+	if (0 < read) {
+		std::cout << "result = " << result << std::endl;
   }
+	else {
+		std::cout << "Failed to locate the data.\n";
+		return 1;	
+	
+	}
+
+
+
 
 	return -1;
 
@@ -413,8 +434,9 @@ int search_quants_bin(int mouse_id, std::string row_id, std::string col_id) {
 
 
 int main(int argc, char const *argv[]) {
-  // read_quants_bin("/home/nikhil/Downloads/alevin_matrices/mouse_1/quants_mat.gz");
-	search_quants_bin(1, "AGTCTTTAGCCTCGTG", "ENSMUSG00000105241.1");
+  //read_quants_bin("/home/nikhil/Downloads/alevin_matrices/mouse_1/quants_mat.gz");
+
+	search_quants_bin(2, "CGAGAAGGTCGAGTTT", "ENSMUSG00000020477.10");
 	//testing();
   return 0;
 }
